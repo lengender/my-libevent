@@ -160,7 +160,23 @@ int event_priority_set(struct event* ev, int pri);
 
 //add a timeout event
 #define timeout_add(ev, tv)  event_add(ev, tv)
+#define timeout_set(ev, cb, arg) event_set(ev, -1, 0, cb, arg)
+#define timeout_del(ev) event_del(ev)
+#define timeout_pending(ev, tv) event_pending(ev, EV_TIMEOUT, tv)
+#define timeout_initialized(ev)  ((ev)->ev_flags & EVLIST_INIT)
+
+#define signal_add(ev, tv) event_add(ev, tv)
+#define signal_set(ev, x, cb, arg) \
+        event_set(ev, x, EV_SIGNAL | EV_PRESIST, cb, arg)
+#define signal_del(ev)   event_del(ev)
+#define signal_pending(ev, tv)   event_pending(ev, EV_SIGNAL, tv)
+#define signal_initialized(ev)   ((ev)->ev_flags & EVLIST_INIT)
+
 
 //注册事件
 int event_add(struct event *ev, const struct timeval *tv);
+//删除事件
+int event_del(struct event *);
+//事件主循环
+int event_base_loop(struct event_base* base, int flags);
 #endif

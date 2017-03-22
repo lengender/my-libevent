@@ -23,7 +23,11 @@
  * Global state
  */
 struct event_base *current_base = NULL;
+extern struct event_base* evsignal_base;
 
+/* Prototypes*/
+static void event_queue_insert(struct event_base *, struct event*, int);
+static void event_queue_remove(struct event_base *, struct event*, int);
 
 void
 event_set(struct event *ev, int fd, short events,void (*callback)(int, short, void*), void *arg){
@@ -80,13 +84,13 @@ event_add(struct event *ev, const struct timeval *tv){
     void *evbase = base->evbase;
     int res = 0;
 
-    event_debug((
+    event_debug(
         "event_add: event : %p, %s%s%scall %p",
         ev,
         ev->ev_events & EV_READ ? "EV_READ " : " ",
         ev->ev_events & EV_WRITE ? "EV_WRITE " : " ",
         tv ? "EV_TIMEOUT " : " ",
-        ev->ev_callback));
+        ev->ev_callback);
 
     assert(!(ev->ev_flags & ~EVLIST_ALL));
 
@@ -135,4 +139,141 @@ event_add(struct event *ev, const struct timeval *tv){
     }
 
     return res;
+}
+
+int 
+event_del(struct event *ev){
+    struct event_base *base;
+    const struct eventop *evsel;
+    void *evbase;
+
+    event_debug("event_del: %p, callback %p", ev, ev->ev_callback);
+
+    //ev_base为NULL, 表明ev没有被注册
+    if(ev->ev_base == NULL)
+        return -1;
+
+    //取得ev注册的ev_base和eventop指针
+    base = ev->ev_base;
+    evsel = base->evsel;
+    evbase = base->evbase;
+
+    assert(!(ev->ev_flags & ~EVLIST_ALL));
+
+    //将ev_callback调用次数设置为0， 
+    //see if we are just active execting this event in a loop
+    if(ev->ev_ncalls && ev->ev_pncalls){
+        *ev->ev_pncalls = 0;
+    }
+
+    //从对应的链表中删除
+    if(ev->ev_flags & EVLIST_TIMEOUT)
+        event_queue_remove(base, ev, EVLIST_TIMEOUT);
+    if(ev->ev_flags & EVLIST_ACTIVE)
+        event_queue_remove(base, ev, EVLIST_ACTIVE);
+    if(ev->ev_flags & EVLIST_INSERTED){
+        event_queue_remove(base, ev, EVLIST_INSERTED);
+        //EVLIST_INSTRTED表明是IO或signal事件，需要调用IO demultiplexer注销事件
+        return (evsel->del(evbase, ev));
+    }
+
+    return 0;
+}
+
+int 
+event_base_loop(struct event_base *base, int flags){
+    const struct eventop *evsel = base->evsel;
+    void *evbase = base->evbase;
+    struct timeval tv;
+    struct timeval *tv_p;
+    int res, done;
+
+    //清空时间缓存
+    base->tv_cache.tv_sec = 0;
+
+    //evsignal_base是全局变量，在处理signal时，用于指明signal所属的event_base实例
+    if(base->sig.ev_signal_added)
+        evsignal_base = base;
+
+    done = 0;
+
+    //事件主循环
+    while(!done){
+        //查看是否需要跳出循环，程序可以调用event_loopexit_cb()设置event_gotterm标记
+        //调用event_base_loopbreak设置event_break标志
+        if(base->event_gotterm){
+            base->event_gotterm = 0;
+            break;
+        }
+
+        if(base->event_break){
+            base->event_break = 0;
+            break;
+        }
+
+        //校正系统时间，如果系统使用的是非MONOTONIC时间，用户可能会向后调整了系统时间
+        //在timeout_correct函数中，比较last wait time和当前事件，如果
+        //当前时间 < last wait time
+        //表明时间有问题，这需要更新timer_heap中所有定时事件的超时时间
+        timeout_correct(base, &tv);
+        
+    }
+
+}
+
+void 
+event_queue_insert(struct event_base *base, struct event* ev, int queue){
+    //ev可能已经在激活列表中了，避免重复插入
+    if(ev->ev_flags & queue){
+        if(queue & EVLIST_ACTIVE)
+            return;
+
+        event_errx(1, "%s: %p(fd %d) already on queue %x", __func__,
+                  ev, ev->ev_fd, queue);
+    }
+
+    if(~ev->ev_flags & EVLIST_INTERNAL)
+        base->event_count++;
+
+    ev->ev_flags |= queue;
+    switch(queue){
+        case EVLIST_INSERTRED:  //IO或signal事件，加入已注册事件链表
+            TAILQ_INSERT_TAIL(&base->eventqueue, ev, ev_next);
+            break;
+        case EVLIST_ACTIVE:  //就绪事件，加入激活链表
+            base->event_count_active++;
+            TAILQ_INSERT_TAIL(base->activequeues[ev->ev_pri], ev, ev_active_next);
+            break;
+        case EVLIST_TIMEOUT:  //定时事件，加入堆
+            min_heap_push(&base->timeheap, ev);
+            break;
+        default:
+        event_errx(1, "%s: unknown queue %x", __func__, queue);
+    }
+}
+
+void
+event_queue_remove(struct event_base* base, struct event *ev, int queue)
+{
+    if(!(ev->ev_flags & queue))
+        event_errx(1, "%s: %p (fd %d) not on queue %x", __func__, ev, ev->ev_fd, queue);
+
+    if(~ev->ev_flags & EVLIST_INTERNAL)
+        bae->event_count--;
+
+    ev->ev_flags &= ~queue;
+    switch(queue){
+        case EVLIST_INSERTED:
+            TAILQ_REMOVE(&base->eventqueue, ev, ev_next);
+            break;
+        case EVLIST_ACTIVE:
+            base->event_count_active--;
+            TAILQ_REMOVE(base->activequeues[ev->ev_pri], ev, ev_active_next);
+            break;
+        case EVLIST_TIMEOUT:
+            min_heap_erase(&base->timheap, ev);
+            break;
+        default:
+            event_errx(1, "%s: unknown queue %x", __func__, queue);
+    }
 }
