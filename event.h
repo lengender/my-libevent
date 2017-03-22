@@ -173,10 +173,59 @@ int event_priority_set(struct event* ev, int pri);
 #define signal_initialized(ev)   ((ev)->ev_flags & EVLIST_INIT)
 
 
+//Initialize the event API 
+struct event_base *event_base_new(void);
+struct event_base *event_init(void);
+int event_reinit(struct event_base *base);
+//loop to process events
+int event_dispatch(void);
+//threadsafe event dispatching loop
+int event_base_dispatch(struct event_base*);
+//get the kernel event notification mechanism used by libevent
+const char *event_base_get_method(struct event_base *);
+//deallocate all memory associated with an event_base , and free the base
+void event_base_free(struct event_base *);
+
+
+
+
+
+#define EVLOOP_ONCE 0x01
+#define EVLOOP_NONBLOCK 0x02
+
 //注册事件
 int event_add(struct event *ev, const struct timeval *tv);
 //删除事件
 int event_del(struct event *);
+//激活事件
+void event_active(struct event *, int, short);
 //事件主循环
 int event_base_loop(struct event_base* base, int flags);
+
+int event_loop();
+int event_loopexit(const struct timeval *);
+int event_base_loopexit(struct event_base*, const struct timeval*);
+int event_loopbreak(void);
+int event_base_loopbreak(struct event_base *);
+
+//prepare an event structure to be added
+void event_set(struct event*, int , short, void(*)(int, short, void*), void *);
+//schedule a one-time event to occur
+int event_once(int, short, void (*)(int, short, void *), void *, const struct timeval *);
+//shcedule a one-time event(threadsafe variant)
+int event_base_once(struct event_base *base, int fd, short events,
+                   void (*callback)(int, short, void*), void *arg,
+                   const struct timeval *timeout);
+
+//checks if a specific event is pending or shceduled
+int event_pending(struct event* ev, short event, struct timeval *tv);
+
+//set the number of different event priorities
+int event_priority_init(int);
+
+//set the number of different event priorities(threadsafe variant)
+int event_base_priority_init(struct event_base *, int);
+//assign a priority to an event
+int event_priority_set(struct event *, int);
+
 #endif
