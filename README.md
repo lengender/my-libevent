@@ -6,7 +6,7 @@
 GO !!! <br>
 
 ### 开始<br>
-* 3.21    完成事件event数据结构和相关接口函数,开始学习事件处理框架-event_bas<br>
+* 3.21    完成事件event数据结构和相关接口函数,开始学习事件处理框架 event_base<br>
 
 * 3.22    完成libevent关于事件主循环的分析，主要是event_base_loop函数的解析过程<br>
 
