@@ -6,9 +6,9 @@
 GO !!! <br>
 
 ### 开始<br>
->* 3.21  完成事件event数据结构和相关接口函数,开始学习事件处理框架-event_base<br>
+>* 3.21		完成事件event数据结构和相关接口函数,开始学习事件处理框架-event_base<br>
 <br>
->* 3.22完成libevent关于事件主循环的分析，主要是event_base_loop函数的解析过程<br>
+>* 3.22		完成libevent关于事件主循环的分析，主要是event_base_loop函数的解析过程<br>
 
         1) 开始
         2) 调整系统时间与否
@@ -21,5 +21,5 @@ GO !!! <br>
         9) 根据优先级处理激活链表中的就绪event,调用其回调函数执行事件处理(优先级越小越高)
         10) 结束
 
->为事件主循环的主要流程，libevent将Timer和Signal事件都统一到了系统I/O的demultiplex机制中<br>
-下一步，具体分析信号事件，定时器事件和I/O多路复用事件的处理<br
+	为事件主循环的主要流程，libevent将Timer和Signal事件都统一到了系统I/O的demultiplex机制中<br>
+	下一步，具体分析信号事件，定时器事件和I/O多路复用事件的处理<br>
