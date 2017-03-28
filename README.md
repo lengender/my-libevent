@@ -24,9 +24,9 @@ GO !!!
 	以上为事件主循环的主要流程，libevent将Timer和Signal事件都统一到了系统I/O的demultiplex机制中
 	下一步，具体分析信号事件，定时器事件和I/O多路复用事件的处理。
 
-* 3.24   完成libevent关于信号处理部分，它将signal事件统一到系统的I/O多路复用中。Siganl事件的出现
-        对进程来说是完全随机的，进程不能只是测试一个变量来判别是否发生了一个信号，而是告诉内核“在
-        信号发生时，请执行如下的操作”。
+* 3.24   完成libevent关于信号处理部分。
+    + 它将signal事件统一到系统的I/O多路复用中。Siganl事件的出现对进程来说是完全随机的，进程不能
+        只是测试一个变量来判别是否发生了一个信号，而是告诉内核“在信号发生时，请执行如下的操作”。
     + 统一事件源的工作原理如下：
     假如用户要监听SIGINT信号，那么在实现的内部就对SIGINT这个函数设置捕捉函数。此外，在实现的内部
     还要建立一条管道，并把这个管道加入到多路IO复用函数中。当SIGINT这个信号发生时，抓捕函数就会被
@@ -40,6 +40,52 @@ GO !!!
             3) 设置信号捕抓函数
             4) 有信号发生，就往socketpair写入一个字节 
     信号处理过程已完成，下一步，完成定时器处理部分。
+    
+* 3.26 完成集成定时器部分。
+    + Libevent 将Timer时间融合到系统I/O多路复用的机制中，因为系统的IO机制像select()和epoll_wait()
+        都有运行程序指定一个最大等待时间（也称为最大超时时间）timeout,即使没有IO事件发生，它们也
+        能够保证在timeout时间内返回。
+    + 根据所有Timer事件的最小超时时间来设置I/O的timeout时间；当系统I/O返回时，再激活所有就绪的Timer
+        事件就可以了。这样就将Timer事件完美融合到了IO机制中了。
+    + 使用最小堆管理Timer事件，其key值就是事件的超时时间。向堆中插入、删除元素的复杂度都是O(lgN),N为
+        堆中元素的个数，而获取最小key值的复杂度为O(1)。堆是一个完全二叉树，基本存储方式是一个数组。
+
+* 3.28 I/O demultiple机制
+    + Libevent支持多种 I/O多路复用技术的关键在于结构体eventop.
+        ```cpp
+        struct eventop{
+            const char* name;
+            void *(*init)(struct event_base *);  //初始化
+            int (*add)(void *, struct event *);  //注册事件
+            int (*del)(void *, struct event *);  //删除事件
+            int (*dispatch)(struct event_base *, void *, struct timeval *); /事件分发
+            void (*dealloc)(struct event_base *, void *);  //注销，释放资源
+            //set if we need to reinitialize the event base
+            int need_reinit;
+        };
+        ```
+        在libevent中，每种I/O demultiplex机制的实现都必须提供这五个函数接口。
+    + epoll 实现
+        * epoll.c中，eventop对象epollops定义如下：
+            ```cpp
+            const struct eventop epollops = {
+                "epoll",
+                epoll_init,
+                epoll_add,
+                epoll_del,
+                epoll_dispatch,
+                epoll_dealloc,
+                1  //need reinit
+            };
+            ```
+        * 具体实现见epoll.c中
+        * epoll 函数相当重要！！！
+    
+
+
         
- 
+       
+    
+
+
 		
