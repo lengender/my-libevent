@@ -20,6 +20,32 @@
 #include"event.h"
 #include"queue.h"
 
+//In order of preference
+static const struct eventop *eventops[] ={
+#ifdef HAVE_EVENT_PORTS
+    &evportops,
+#endif
+#ifdef HAVE_WORKING_KQUEUE
+    &kqops,
+#endif
+#ifdef HAVE_EPOLL
+    &epollops,
+#endif
+#ifdef HAVE_DEVPOLL
+    #devpollops,
+#endif
+#ifdef HAVE_SELECT
+    &selectops,
+#endif
+#ifdef WIN32
+    &win32ops,
+#endif
+    NULL
+}
+
+
+
+
 /*
  * Global state
  */
